@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)release, e.g. v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.name }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          mkdir -p dist
+          go build \
+            -trimpath \
+            -ldflags "-s -w -X github.com/GMfatcat/piper/internal/version.Version=${TAG}" \
+            -o "dist/piper-${TAG}-${GOOS}-${GOARCH}" \
+            ./cmd/piper
+          file "dist/piper-${TAG}-${GOOS}-${GOARCH}"
+          ls -la dist/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: piper-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/piper-*
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect prerelease
+        id: prerelease
+        env:
+          TAG: ${{ steps.tag.outputs.name }}
+        run: |
+          # Pre-release if tag is v0.x.x (Phase 1 era) or carries a -suffix (rc/alpha/beta).
+          if [[ "$TAG" =~ ^v0\. ]] || [[ "$TAG" == *-* ]]; then
+            echo "value=true" >> $GITHUB_OUTPUT
+          else
+            echo "value=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-staging
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        working-directory: dist-staging
+        run: |
+          sha256sum piper-* > SHA256SUMS
+          ls -la
+          cat SHA256SUMS
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          prerelease: ${{ steps.prerelease.outputs.value }}
+          fail_on_unmatched_files: true
+          generate_release_notes: false
+          body: |
+            Automated release built by GitHub Actions for tag `${{ steps.tag.outputs.name }}`.
+
+            ## Downloads
+
+            | Asset | Target |
+            |-------|--------|
+            | `piper-${{ steps.tag.outputs.name }}-linux-amd64` | Linux x86_64 (H100, generic servers) |
+            | `piper-${{ steps.tag.outputs.name }}-linux-arm64` | Linux aarch64 (DGX Spark, Jetson, etc.) |
+            | `SHA256SUMS` | Checksums for both binaries |
+
+            Both binaries are statically linked (no cgo, no shared library dependencies)
+            and embed the web UI assets via `go:embed` — they run on a vanilla glibc
+            host without any extra setup.
+
+            ### Verify
+
+            ```bash
+            sha256sum -c SHA256SUMS
+            ./piper-${{ steps.tag.outputs.name }}-linux-amd64 --version
+            ```
+
+            ### Quickstart
+
+            ```bash
+            mv piper-${{ steps.tag.outputs.name }}-linux-amd64 /usr/local/bin/piper
+            chmod +x /usr/local/bin/piper
+            sudo ufw allow 7878/tcp
+            piper serve --scan-interval 5m
+            ```
+
+            See [README](https://github.com/GMfatcat/piper/blob/main/README.md)
+            and [ACCEPTANCE.md](https://github.com/GMfatcat/piper/blob/main/ACCEPTANCE.md)
+            for full docs and verification status.
+          files: |
+            dist-staging/piper-*
+            dist-staging/SHA256SUMS
