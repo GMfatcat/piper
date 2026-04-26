@@ -1,0 +1,11 @@
+# SYNTHETIC FIXTURE — verify against real H100/Spark output before Phase 1 sign-off
+
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere
+[ 2] 8080/tcp                   ALLOW IN    Anywhere
+[ 3] 7878/tcp                   ALLOW IN    Anywhere
+[ 4] 9000/udp                   ALLOW IN    Anywhere
+[ 5] 9100/tcp                   DENY IN     Anywhere

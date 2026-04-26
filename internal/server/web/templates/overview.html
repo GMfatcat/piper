@@ -1,0 +1,183 @@
+{{define "title"}}Overview — piper{{end}}
+
+{{define "content"}}
+<h1>Overview</h1>
+
+<div class="toolbar">
+  {{/* Check ports form — POST /api/check, result injected into #result */}}
+  <form hx-post="/api/check"
+        hx-target="#result"
+        hx-swap="innerHTML"
+        hx-ext="json-enc"
+        onsubmit="return false;"
+        id="check-form">
+    <label>
+      <span>Check ports</span>
+      <input type="text" name="ports" id="check-input" placeholder="8080 9000-9005" aria-label="ports to check">
+    </label>
+    <button type="button"
+            onclick="piperCheck()">Go</button>
+  </form>
+
+  {{/* Suggest free form — GET /api/suggest */}}
+  <form hx-get="/api/suggest"
+        hx-target="#result"
+        hx-swap="innerHTML"
+        id="suggest-form">
+    <label>
+      <span>n</span>
+      <input type="number" name="n" value="1" min="1" max="100" style="width:4rem" aria-label="count">
+    </label>
+    <label>
+      <span>from</span>
+      <input type="number" name="from" value="8000" min="1" max="65535" style="width:6rem" aria-label="from port">
+    </label>
+    <label>
+      <span>to</span>
+      <input type="number" name="to" value="9999" min="1" max="65535" style="width:6rem" aria-label="to port">
+    </label>
+    <button type="submit">Suggest</button>
+  </form>
+
+  {{/* Refresh now — POST /api/scan/trigger */}}
+  {{if $.IsLocalhost}}
+  <button hx-post="/api/scan/trigger"
+          hx-swap="none"
+          hx-on::after-request="window.location.reload()">
+    Refresh now
+  </button>
+  {{end}}
+
+  <span class="scan-status">
+    Last scan:
+    {{if not .LastScanAt.IsZero}}
+      {{.LastScanAt.Format "2006-01-02 15:04:05"}}
+    {{else}}
+      unknown
+    {{end}}
+  </span>
+</div>
+
+{{/* Inline script for check form (no custom JS beyond this adapter) */}}
+<script>
+function piperCheck() {
+  var val = document.getElementById('check-input').value.trim();
+  if (!val) return;
+  var ports = [];
+  val.split(/[\s,]+/).forEach(function(tok) {
+    if (tok) ports.push(tok);
+  });
+  fetch('/api/check', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ports: ports})
+  }).then(function(r){ return r.text(); })
+    .then(function(t){
+      document.getElementById('result').innerHTML = '<pre>' + t + '</pre>';
+    });
+}
+</script>
+
+{{/* Port status main table */}}
+<section>
+  <h2>Port Status</h2>
+  {{if not .Ports}}
+    <p>No stateful ports found in the latest snapshot. Run a scan or check specific ports above.</p>
+  {{else}}
+  <figure>
+    <table class="port-table">
+      <thead>
+        <tr>
+          <th>Port</th>
+          <th>State</th>
+          <th>Occupant</th>
+          <th>Container Status</th>
+          <th>UFW</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Ports}}
+        <tr>
+          <td><code>{{.Port}}</code></td>
+          <td>
+            {{if eq (printf "%s" .State) "used_docker"}}
+              <span class="state-badge state-used-docker">🟢 USED</span>
+            {{else if eq (printf "%s" .State) "used_process"}}
+              <span class="state-badge state-used-process">🟢 USED</span>
+            {{else if eq (printf "%s" .State) "reserved_implicit"}}
+              <span class="state-badge state-reserved-implicit">🔒 IMPL</span>
+            {{else if eq (printf "%s" .State) "reserved_explicit"}}
+              <span class="state-badge state-reserved-explicit">📌 EXPL</span>
+            {{else}}
+              <span class="state-badge state-free">✅ FREE</span>
+            {{end}}
+          </td>
+          <td>
+            {{if .Occupant}}
+              {{if eq .Occupant.Type "docker"}}
+                {{.Occupant.ContainerName}}
+              {{else}}
+                {{.Occupant.ProcessName}} (pid {{.Occupant.PID}})
+              {{end}}
+            {{else if .Reservation}}
+              {{if eq .Reservation.Source "explicit"}}
+                {{.Reservation.Name}}
+              {{else}}
+                {{.Reservation.ContainerName}}
+              {{end}}
+            {{else}}
+              —
+            {{end}}
+          </td>
+          <td>
+            {{if .Occupant}}
+              {{if eq .Occupant.Type "docker"}}
+                {{.Occupant.ContainerStatus}}
+              {{else}}
+                —
+              {{end}}
+            {{else if .Reservation}}
+              {{if eq .Reservation.Source "implicit"}}
+                {{.Reservation.ContainerStatus}}
+              {{else}}
+                —
+              {{end}}
+            {{else}}
+              —
+            {{end}}
+          </td>
+          <td>
+            {{if .UFW}}
+              {{if eq .UFW.Action "allow"}}
+                <span class="ufw-allow">allow ✅</span>
+              {{else if eq .UFW.Action "deny"}}
+                <span class="ufw-deny">deny ❌</span>
+              {{else}}
+                <span>{{.UFW.Action}}</span>
+              {{end}}
+            {{else}}
+              <span class="ufw-none">none</span>
+            {{end}}
+          </td>
+          <td>
+            <button hx-get="/api/port/{{.Port}}"
+                    hx-target="#result"
+                    hx-swap="innerHTML">view</button>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </figure>
+  {{end}}
+</section>
+
+{{/* Detail area (collapsed by default) */}}
+<details>
+  <summary>Detail / Check result</summary>
+  <div id="result">
+    <p>Use the forms above to check ports or suggest free ones.</p>
+  </div>
+</details>
+{{end}}

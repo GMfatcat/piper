@@ -1,0 +1,2 @@
+{"ID":"a3f5b2c1d4e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2","Names":"ai-translate-server","Image":"translate:v2","State":"running","Status":"Up 3 days","Ports":"0.0.0.0:8080->80/tcp, 0.0.0.0:8443->443/tcp"}
+{"ID":"b4e7c3d2e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2","Names":"metrics-collector","Image":"prom/node-exporter:latest","State":"running","Status":"Up 1 day","Ports":"0.0.0.0:9100->9100/tcp, 0.0.0.0:9200->9200/udp"}

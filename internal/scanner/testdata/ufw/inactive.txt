@@ -1,0 +1,3 @@
+# SYNTHETIC FIXTURE — verify against real H100/Spark output before Phase 1 sign-off
+
+Status: inactive

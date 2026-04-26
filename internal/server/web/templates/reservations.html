@@ -1,0 +1,69 @@
+{{define "title"}}Reservations — piper{{end}}
+
+{{define "content"}}
+<h1>Reservations</h1>
+
+{{if not .Reservations}}
+  <p>No explicit reservations found.</p>
+{{else}}
+<figure>
+  <table>
+    <thead>
+      <tr>
+        <th>Port</th>
+        <th>Name</th>
+        <th>Note</th>
+        <th>Created</th>
+        <th>By</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Reservations}}
+      <tr>
+        <td><code>{{.Port}}</code></td>
+        <td>{{.Name}}</td>
+        <td>{{.Note}}</td>
+        <td>{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+        <td>{{.CreatedBy}}</td>
+        <td>
+          {{if $.IsLocalhost}}
+          <button hx-delete="/api/reservations/{{.Port}}"
+                  hx-confirm="Delete reservation for port {{.Port}}?"
+                  hx-swap="none"
+                  hx-on::after-request="window.location.reload()">
+            del
+          </button>
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</figure>
+{{end}}
+
+{{if $.IsLocalhost}}
+<section>
+  <h2>+ New reservation</h2>
+  <form hx-post="/api/reservations"
+        hx-swap="none"
+        hx-on::after-request="window.location.reload()"
+        style="max-width: 480px;">
+    <label>
+      Port
+      <input type="number" name="port" min="1" max="65535" required placeholder="e.g. 9100" aria-label="Port number">
+    </label>
+    <label>
+      Name
+      <input type="text" name="name" required placeholder="e.g. vllm-llama" aria-label="Service name">
+    </label>
+    <label>
+      Note
+      <input type="text" name="note" placeholder="optional description" aria-label="Optional note">
+    </label>
+    <button type="submit">Reserve</button>
+  </form>
+</section>
+{{end}}
+{{end}}

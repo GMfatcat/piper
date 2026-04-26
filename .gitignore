@@ -1,0 +1,31 @@
+# Build artifacts
+/dist/
+/bin/
+/piper
+/piper.exe
+/piper-arm64
+
+# Go
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Local data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+piper.log
+.piper/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.stackdump

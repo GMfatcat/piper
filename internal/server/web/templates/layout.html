@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{block "title" .}}piper{{end}}</title>
+  <link rel="stylesheet" href="/static/pico.min.css">
+  <link rel="stylesheet" href="/static/piper.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong>piper</strong></li>
+        <li>— call once, all ports come marching</li>
+      </ul>
+      <ul>
+        <li><a href="/">Overview</a></li>
+        <li><a href="/reservations">Reservations</a></li>
+        <li><a href="/history">History</a></li>
+      </ul>
+    </nav>
+    {{if not .UFWActive}}
+      <article class="warning">UFW is inactive — port firewall info unavailable. Run <code>sudo ufw enable</code>.</article>
+    {{end}}
+  </header>
+  <main class="container">
+    {{block "content" .}}{{end}}
+  </main>
+  <footer class="container"><small>piper · {{.Now.Format "2006-01-02 15:04:05"}}</small></footer>
+</body>
+</html>

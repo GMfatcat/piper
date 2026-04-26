@@ -1,0 +1,31 @@
+[
+  {
+    "Id": "a3f5b2c1d4e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2",
+    "Name": "/ai-translate-server",
+    "Config": {
+      "Image": "translate:v2"
+    },
+    "State": {
+      "Status": "running",
+      "Running": true
+    },
+    "NetworkSettings": {
+      "Ports": {
+        "80/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "8080"
+          }
+        ],
+        "443/tcp": [
+          {
+            "HostIp": "0.0.0.0",
+            "HostPort": "8443"
+          }
+        ],
+        "9090/tcp": null,
+        "9091/tcp": null
+      }
+    }
+  }
+]

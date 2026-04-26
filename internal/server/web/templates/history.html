@@ -1,0 +1,76 @@
+{{define "title"}}History — piper{{end}}
+
+{{define "content"}}
+<h1>History</h1>
+
+<div class="filter-form">
+  <form method="GET" action="/history" style="display:contents">
+    <label>
+      Port filter
+      <input type="number" name="port" min="1" max="65535" placeholder="all ports" aria-label="Filter by port">
+    </label>
+
+    <fieldset>
+      <legend>Event type</legend>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="event" value="occupied"> occupied</label>
+        <label><input type="checkbox" name="event" value="released"> released</label>
+        <label><input type="checkbox" name="event" value="reserved"> reserved</label>
+        <label><input type="checkbox" name="event" value="unreserved"> unreserved</label>
+      </div>
+    </fieldset>
+
+    <label>
+      Time range
+      <select name="days" aria-label="Time range">
+        <option value="1">Last 24 hours</option>
+        <option value="7" selected>Last 7 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+    </label>
+
+    <div>
+      <button type="submit">Filter</button>
+    </div>
+  </form>
+</div>
+
+{{if not .Events}}
+  <p>No history events found for the selected filters.</p>
+{{else}}
+<figure>
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Port</th>
+        <th>Event</th>
+        <th>Occupant</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Events}}
+      <tr class="timeline-row">
+        <td>{{.Timestamp.Format "2006-01-02 15:04:05"}}</td>
+        <td><code>{{.Port}}</code></td>
+        <td>
+          {{if eq (printf "%s" .Event) "occupied"}}
+            🟢 occupied
+          {{else if eq (printf "%s" .Event) "released"}}
+            🔓 released
+          {{else if eq (printf "%s" .Event) "reserved"}}
+            📌 reserved
+          {{else if eq (printf "%s" .Event) "unreserved"}}
+            🗑 unreserved
+          {{else}}
+            {{.Event}}
+          {{end}}
+        </td>
+        <td>{{.Occupant}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</figure>
+{{end}}
+{{end}}

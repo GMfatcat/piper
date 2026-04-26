@@ -1,0 +1,4 @@
+# SYNTHETIC FIXTURE — verify against real H100/Spark output before Phase 1 sign-off
+
+LISTEN 0      4096   0.0.0.0:8080   0.0.0.0:*   users:(("docker-proxy",pid=12453,fd=4))
+LISTEN 0      4096   [::]:8080      [::]:*       users:(("docker-proxy",pid=12454,fd=4))

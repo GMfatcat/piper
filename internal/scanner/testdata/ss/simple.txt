@@ -1,0 +1,6 @@
+# SYNTHETIC FIXTURE — verify against real H100/Spark output before Phase 1 sign-off
+
+LISTEN 0      4096   0.0.0.0:8080   0.0.0.0:*   users:(("python3",pid=1234,fd=5))
+LISTEN 0      128    127.0.0.1:6379 0.0.0.0:*   users:(("redis-server",pid=5678,fd=6))
+LISTEN 0      511    0.0.0.0:9090   0.0.0.0:*   users:(("node",pid=9999,fd=3))
+LISTEN 0      128    127.0.0.1:5432 0.0.0.0:*   users:(("postgres",pid=3333,fd=7))
