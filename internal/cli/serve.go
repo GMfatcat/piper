@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/exec"
+	"os/user"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -299,6 +303,13 @@ func RunServe(ctx context.Context, d ServeDeps) error {
 	}
 	fmt.Printf("piper serving on http://%s:%d (data: %s)\n", d.Host, d.Port, dataPath)
 
+	// --- One-shot UFW sudo probe ---
+	// Reports a clear, actionable warning to stderr if `sudo -n ufw status`
+	// cannot run without a password. The serve loop continues regardless —
+	// the periodic scan will record the same diagnosis to slog, and the web
+	// UI will surface a "UFW data unavailable" banner.
+	probeUFWSudo(ctx, os.Stderr)
+
 	// --- Start HTTP server in background ---
 	go func() {
 		if err := srv.ListenAndServe(ctx); err != nil {
@@ -313,6 +324,78 @@ func RunServe(ctx context.Context, d ServeDeps) error {
 		return nil
 	}
 	return err
+}
+
+// ─── probeUFWSudo ─────────────────────────────────────────────────────────────
+
+// ufwProbeRunner is the interface RunServe uses to probe sudo -n ufw status.
+// Tests can substitute a stub. probeUFWSudo uses exec.CommandContext directly
+// in production; the var indirection lets test code wrap or replace it.
+var probeUFWSudoExec = func(ctx context.Context) ([]byte, error) {
+	return exec.CommandContext(ctx, "sudo", "-n", "ufw", "status").CombinedOutput()
+}
+
+// probeUFWSudo runs `sudo -n ufw status` once at startup. If it fails because
+// the configured user is not in sudoers (or the binary is missing), it writes
+// a multi-line warning to w with a copy-paste fix that uses the actual current
+// user. It NEVER blocks startup: success and failure both return promptly.
+func probeUFWSudo(ctx context.Context, w *os.File) {
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	out, err := probeUFWSudoExec(probeCtx)
+	if err == nil {
+		// `Status: inactive` is success at the sudo layer — the firewall is
+		// just turned off. The web UI distinguishes those cases on its own.
+		return
+	}
+
+	combined := strings.ToLower(string(out)) + " " + strings.ToLower(err.Error())
+	uname := currentUsername()
+	ufwBin := "/usr/sbin/ufw" // most common path on Debian/Ubuntu
+
+	switch {
+	case strings.Contains(combined, "password is required"),
+		strings.Contains(combined, "a password is required"),
+		strings.Contains(combined, "is not allowed to execute"),
+		strings.Contains(combined, "not allowed to run"):
+		fmt.Fprint(w, formatUFWSudoersHint(uname, ufwBin))
+	case strings.Contains(combined, "command not found"),
+		strings.Contains(combined, "executable file not found"),
+		strings.Contains(combined, "no such file or directory"):
+		fmt.Fprintf(w, "\n⚠️  WARNING: ufw not found on PATH — UFW scanning will be disabled.\n"+
+			"   Install ufw if you need firewall data:  sudo apt install ufw\n\n")
+	default:
+		fmt.Fprintf(w, "\n⚠️  WARNING: probe of `sudo -n ufw status` failed (%v). UFW scanning may not work until this is resolved.\n\n", err)
+	}
+}
+
+// currentUsername returns the current OS user, or "<your-user>" if it can't
+// be resolved (rare; unprivileged sandbox).
+func currentUsername() string {
+	if u, err := user.Current(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	return "<your-user>"
+}
+
+// formatUFWSudoersHint returns the exact warning printed when sudo refuses to
+// run ufw without a password. The username is interpolated so the snippet is
+// directly copy-pasteable.
+func formatUFWSudoersHint(username, ufwBin string) string {
+	return fmt.Sprintf(`
+⚠️  WARNING: piper cannot read UFW rules without sudo.
+   UFW scanning will be disabled until you configure sudoers.
+
+   Quick fix:
+     sudo tee /etc/sudoers.d/piper-ufw <<EOF
+     %s ALL=(root) NOPASSWD: %s status, %s status numbered
+     EOF
+     sudo chmod 0440 /etc/sudoers.d/piper-ufw
+
+   Then restart piper.
+
+`, username, ufwBin, ufwBin)
 }
 
 // ─── NewServeCmd ──────────────────────────────────────────────────────────────

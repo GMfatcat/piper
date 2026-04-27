@@ -23,6 +23,7 @@
   <form hx-get="/api/suggest"
         hx-target="#result"
         hx-swap="innerHTML"
+        hx-on::after-request="piperShowResult()"
         id="suggest-form">
     <label>
       <span>n</span>
@@ -48,18 +49,42 @@
   </button>
   {{end}}
 
-  <span class="scan-status">
-    Last scan:
+  <span class="scan-status" title="Last scan timestamp">
+    <span class="scan-status-icon" aria-hidden="true">🕒</span>
+    <span class="scan-status-label">Last scan:</span>
     {{if not .LastScanAt.IsZero}}
-      {{.LastScanAt.Format "2006-01-02 15:04:05"}}
+      <time datetime="{{.LastScanAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.LastScanAt.Format "2006-01-02 15:04:05"}}</time>
     {{else}}
-      unknown
+      <em>unknown</em>
     {{end}}
   </span>
 </div>
 
-{{/* Inline script for check form (no custom JS beyond this adapter) */}}
+{{/* Result panel — appears directly under the toolbar, above the port table.
+     Hidden by default; shown when piperCheck() / suggest / per-row view fills #result. */}}
+<article id="result-panel" class="result-panel" role="status" aria-live="polite" hidden>
+  <header class="result-panel-header">
+    <strong>Check / Suggest result</strong>
+    <button type="button"
+            class="result-close"
+            onclick="piperCloseResult()"
+            aria-label="Close result">&times;</button>
+  </header>
+  <div id="result"></div>
+</article>
+
+{{/* Inline script for check form + result panel show/hide adapter */}}
 <script>
+function piperShowResult() {
+  var p = document.getElementById('result-panel');
+  if (p) p.hidden = false;
+}
+function piperCloseResult() {
+  var p = document.getElementById('result-panel');
+  var r = document.getElementById('result');
+  if (r) r.innerHTML = '';
+  if (p) p.hidden = true;
+}
 function piperCheck() {
   var val = document.getElementById('check-input').value.trim();
   if (!val) return;
@@ -74,6 +99,7 @@ function piperCheck() {
   }).then(function(r){ return r.text(); })
     .then(function(t){
       document.getElementById('result').innerHTML = '<pre>' + t + '</pre>';
+      piperShowResult();
     });
 }
 </script>
@@ -150,20 +176,23 @@ function piperCheck() {
           <td>
             {{if .UFW}}
               {{if eq .UFW.Action "allow"}}
-                <span class="ufw-allow">allow ✅</span>
+                <span class="ufw-pill ufw-allow">✅ allow</span>
               {{else if eq .UFW.Action "deny"}}
-                <span class="ufw-deny">deny ❌</span>
+                <span class="ufw-pill ufw-deny">❌ deny</span>
+              {{else if eq .UFW.Action "limit"}}
+                <span class="ufw-pill ufw-limit">⚠️ limit</span>
               {{else}}
-                <span>{{.UFW.Action}}</span>
+                <span class="ufw-pill ufw-complex">{{.UFW.Action}}</span>
               {{end}}
             {{else}}
-              <span class="ufw-none">none</span>
+              <span class="ufw-none">⚠️ none</span>
             {{end}}
           </td>
           <td>
             <button hx-get="/api/port/{{.Port}}"
                     hx-target="#result"
-                    hx-swap="innerHTML">view</button>
+                    hx-swap="innerHTML"
+                    hx-on::after-request="piperShowResult()">view</button>
           </td>
         </tr>
         {{end}}
@@ -172,12 +201,4 @@ function piperCheck() {
   </figure>
   {{end}}
 </section>
-
-{{/* Detail area (collapsed by default) */}}
-<details>
-  <summary>Detail / Check result</summary>
-  <div id="result">
-    <p>Use the forms above to check ports or suggest free ones.</p>
-  </div>
-</details>
 {{end}}

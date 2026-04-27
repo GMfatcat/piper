@@ -22,12 +22,13 @@ import (
 func newWebTestServer() *Server {
 	snap := &stubSnap{
 		snap: service.ScanSnapshot{
-			ScannedAt: time.Date(2026, 4, 25, 14, 32, 18, 0, time.UTC),
-			SS:        []scanner.SSEntry{},
-			Docker:    []scanner.DockerEntry{},
-			Inspected: map[string]scanner.DockerEntry{},
-			UFW:       nil,
-			UFWActive: true,
+			ScannedAt:   time.Date(2026, 4, 25, 14, 32, 18, 0, time.UTC),
+			SS:          []scanner.SSEntry{},
+			Docker:      []scanner.DockerEntry{},
+			Inspected:   map[string]scanner.DockerEntry{},
+			UFW:         nil,
+			UFWActive:   true,
+			UFWReadable: true,
 		},
 	}
 	reserves := newStubReserves()

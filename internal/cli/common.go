@@ -48,12 +48,13 @@ func OpenStore(dataDir string) (*store.Store, error) {
 // running a fresh scan.
 func AdaptScanResult(r scanner.ScanResult) service.ScanSnapshot {
 	return service.ScanSnapshot{
-		ScannedAt: r.FinishedAt,
-		SS:        r.SS,
-		Docker:    r.Docker,
-		Inspected: r.Inspected,
-		UFW:       r.UFW,
-		UFWActive: r.UFWActive,
+		ScannedAt:   r.FinishedAt,
+		SS:          r.SS,
+		Docker:      r.Docker,
+		Inspected:   r.Inspected,
+		UFW:         r.UFW,
+		UFWActive:   r.UFWActive,
+		UFWReadable: r.UFWReadable,
 	}
 }
 

@@ -3,7 +3,9 @@ package scanner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,23 +28,33 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 // reported in the Errors map (key = source name) so the caller can degrade
 // gracefully (e.g., UFW unavailable → still show ss + docker info).
 type ScanResult struct {
-	StartedAt  time.Time
-	FinishedAt time.Time
-	SS         []SSEntry
-	Docker     []DockerEntry           // from `docker ps -a --format json`
-	Inspected  map[string]DockerEntry  // key = container ID; richer Ports via `docker inspect`
-	UFW        []UFWRule
-	UFWActive  bool                   // false when `Status: inactive` or ufw missing
-	Errors     map[string]error       // keys: "ss", "docker", "ufw", "inspect:<id>"
+	StartedAt   time.Time
+	FinishedAt  time.Time
+	SS          []SSEntry
+	Docker      []DockerEntry          // from `docker ps -a --format json`
+	Inspected   map[string]DockerEntry // key = container ID; richer Ports via `docker inspect`
+	UFW         []UFWRule
+	UFWActive   bool             // Status line said "active"
+	UFWReadable bool             // ufw command itself succeeded (regardless of active/inactive)
+	Errors      map[string]error // keys: "ss", "docker", "ufw", "inspect:<id>"
 }
 
 // Scanner runs the four data collectors in parallel.
 type Scanner struct {
 	Runner Runner
+	Logger *slog.Logger
 }
 
-// New returns a Scanner using ExecRunner.
-func New() *Scanner { return &Scanner{Runner: ExecRunner{}} }
+// New returns a Scanner using ExecRunner and slog.Default().
+func New() *Scanner { return &Scanner{Runner: ExecRunner{}, Logger: slog.Default()} }
+
+// log returns the configured logger or slog.Default() if nil.
+func (s *Scanner) log() *slog.Logger {
+	if s.Logger == nil {
+		return slog.Default()
+	}
+	return s.Logger
+}
 
 // Scan kicks off ss / docker ps / ufw status concurrently. Once docker ps
 // completes, it issues `docker inspect <id>` calls (sequentially is fine for
@@ -126,30 +138,42 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 		dockerCh <- dockerResult{entries: entries}
 	}()
 
-	// --- ufw status numbered ---
+	// --- sudo -n ufw status numbered ---
+	// `sudo -n` (non-interactive) fails immediately if a password would be
+	// required, instead of blocking the scan. Configure sudoers (see README)
+	// to grant the piper user passwordless access to `ufw status`.
 	go func() {
 		defer wg.Done()
-		raw, err := s.Runner.Run(ctx, "ufw", "status", "numbered")
+		raw, err := s.Runner.Run(ctx, "sudo", "-n", "ufw", "status", "numbered")
 		if err != nil {
+			stderr := extractStderr(err)
+			s.diagnoseUFWError(err, stderr)
 			mu.Lock()
 			result.Errors["ufw"] = fmt.Errorf("ufw: %w", err)
-			// UFWActive remains false
+			// UFWActive remains false; UFWReadable remains false.
 			mu.Unlock()
 			return
 		}
-		rules, err := ParseUFWStatus(raw)
-		if err != nil {
+		rules, perr := ParseUFWStatus(raw)
+		if perr != nil {
 			mu.Lock()
-			result.Errors["ufw"] = fmt.Errorf("ufw parse: %w", err)
+			result.Errors["ufw"] = fmt.Errorf("ufw parse: %w", perr)
+			// Command succeeded but parser failed — still readable, but contents
+			// are unusable; conservatively leave UFWReadable=false.
 			mu.Unlock()
 			return
 		}
 		// Detect "Status: inactive" — ParseUFWStatus returns empty slice and no error.
 		// Detect "Status: active" by checking if the raw output contains "Status: active".
 		active := containsActiveStatus(raw)
+		if !active {
+			s.log().Warn("ufw is inactive — port firewall data will be unavailable",
+				"hint", "run: sudo ufw enable")
+		}
 		mu.Lock()
 		result.UFW = rules
 		result.UFWActive = active
+		result.UFWReadable = true
 		mu.Unlock()
 	}()
 
@@ -200,6 +224,53 @@ func (s *Scanner) Scan(ctx context.Context) (ScanResult, error) {
 	}
 
 	return result, nil
+}
+
+// extractStderr pulls the captured stderr bytes from an error returned by
+// exec.Cmd.Output(). Falls back to err.Error() so unit-test stub errors with
+// stderr-like substrings ("password is required", "command not found") still
+// trigger the matching diagnostics.
+func extractStderr(err error) string {
+	if err == nil {
+		return ""
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		return string(exitErr.Stderr)
+	}
+	return err.Error()
+}
+
+// diagnoseUFWError logs a slog warning that names the most likely cause of the
+// `sudo -n ufw status` failure and points the operator at the fix. The full
+// error is preserved in result.Errors["ufw"] for the caller to surface.
+func (s *Scanner) diagnoseUFWError(err error, stderr string) {
+	logger := s.log()
+	low := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(low, "password is required"),
+		strings.Contains(low, "a password is required"):
+		logger.Warn("ufw read failed — sudo wants a password under -n",
+			"err", err,
+			"stderr", strings.TrimSpace(stderr),
+			"hint", "configure sudoers: grant NOPASSWD for /usr/sbin/ufw status (see README)")
+	case strings.Contains(low, "command not found"),
+		strings.Contains(low, "no such file or directory"),
+		strings.Contains(low, "executable file not found"):
+		logger.Warn("ufw read failed — ufw not found on PATH",
+			"err", err,
+			"stderr", strings.TrimSpace(stderr),
+			"hint", "install ufw: apt install ufw (or skip ufw integration)")
+	case strings.Contains(low, "is not allowed to execute"),
+		strings.Contains(low, "not allowed to run"):
+		logger.Warn("ufw read failed — sudoers does not permit this command",
+			"err", err,
+			"stderr", strings.TrimSpace(stderr),
+			"hint", "extend sudoers to allow `ufw status numbered` for this user (see README)")
+	default:
+		logger.Warn("ufw read failed",
+			"err", err,
+			"stderr", strings.TrimSpace(stderr))
+	}
 }
 
 // containsActiveStatus checks whether the UFW output contains "Status: active".

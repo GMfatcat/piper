@@ -47,11 +47,33 @@ Make 目標：
 | `make build-host` | `dist/piper[.exe]` — 當前 OS/arch，開發便利 |
 | `make test` / `test-race` / `lint` / `fmt` / `vet` | 顧名思義 |
 
+## Sudoers 設定（UFW 必要步驟）
+
+`ufw status` 需要 root 權限。piper 以一般使用者身份運行，因此需要 sudoers
+白名單授予「免密碼」執行該指令的權限。沒設定的話，`piper serve` 啟動時會
+印警告，Web UI 也會顯示 "UFW data unavailable" banner；`ss` 與 `docker`
+資料仍可正常使用。
+
+在目標主機**執行一次**（將 `ymu` 換成你的使用者名稱）：
+
+```bash
+sudo tee /etc/sudoers.d/piper-ufw <<EOF
+ymu ALL=(root) NOPASSWD: /usr/sbin/ufw status, /usr/sbin/ufw status numbered
+EOF
+sudo chmod 0440 /etc/sudoers.d/piper-ufw
+```
+
+白名單是**唯讀的** — piper 仍然無法新增或刪除 UFW 規則。非 Debian 系統請
+把 `/usr/sbin/ufw` 換成 `which ufw` 給出的實際路徑。
+
 ## 快速上手
 
 ```bash
 # 把 binary 丟到目標主機
 scp dist/piper user@h100:~/
+
+# 設定免密碼 `sudo ufw status`（見上方「Sudoers 設定」）
+# … 接著 …
 
 # 開放 web port（一次性）
 ssh user@h100 'sudo ufw allow 7878/tcp'

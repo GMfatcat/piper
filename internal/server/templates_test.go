@@ -32,8 +32,9 @@ func renderToString(t *testing.T, page string, data TemplateData) string {
 // baseData returns a TemplateData with safe defaults (non-zero Now etc.).
 func baseData() TemplateData {
 	return TemplateData{
-		Now:       time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC),
-		UFWActive: true,
+		Now:         time.Date(2026, 4, 26, 10, 0, 0, 0, time.UTC),
+		UFWActive:   true,
+		UFWReadable: true,
 	}
 }
 
@@ -117,6 +118,27 @@ func TestRender_Overview_NoUFWBannerWhenActive(t *testing.T) {
 
 	if strings.Contains(html, "UFW is inactive") {
 		t.Error("unexpected 'UFW is inactive' banner when UFWActive=true")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 4b. TestRender_Overview_UFWUnreadableBanner
+// ---------------------------------------------------------------------------
+
+func TestRender_Overview_UFWUnreadableBanner(t *testing.T) {
+	t.Log("UFWReadable=false should render the 'UFW data unavailable' banner instead of the inactive one")
+
+	data := baseData()
+	data.UFWReadable = false
+	data.UFWActive = false // moot when not readable
+
+	html := renderToString(t, "web/templates/overview.html", data)
+
+	if !strings.Contains(html, "UFW data unavailable") {
+		t.Error("expected 'UFW data unavailable' banner when UFWReadable=false")
+	}
+	if strings.Contains(html, "UFW is inactive") {
+		t.Error("'UFW is inactive' banner must not appear when UFWReadable=false (sudoers issue takes priority)")
 	}
 }
 

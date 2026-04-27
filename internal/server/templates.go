@@ -47,14 +47,15 @@ var webFS embed.FS
 // Page handlers fill only the fields relevant to their page; other fields
 // default to their zero values which the templates treat as "nothing to show".
 type TemplateData struct {
-	Title       string
-	IsLocalhost bool          // controls write-button visibility per §5.4
-	Now         time.Time     // current time (set by handlers via Deps.now())
-	LastScanAt  time.Time     // injected from snapshot for "Last scan: X" text
-	UFWActive   bool          // false → top banner shown
-	Ports       []service.PortStatus // overview page
+	Title        string
+	IsLocalhost  bool      // controls write-button visibility per §5.4
+	Now          time.Time // current time (set by handlers via Deps.now())
+	LastScanAt   time.Time // injected from snapshot for "Last scan: X" text
+	UFWActive    bool      // false (with UFWReadable=true) → "ufw inactive" banner
+	UFWReadable  bool      // false → "ufw data unavailable / sudoers" banner
+	Ports        []service.PortStatus // overview page
 	Reservations []store.Reservation  // reservations page
-	Events      []store.Event         // history page
+	Events       []store.Event        // history page
 }
 
 // ---------------------------------------------------------------------------

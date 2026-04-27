@@ -76,12 +76,14 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 		IsLocalhost: isLocalhostRequest(r),
 		Now:         s.deps.now(),
 		UFWActive:   true, // default; overridden below if snapshot available
+		UFWReadable: true, // default; overridden below if snapshot available
 	}
 
 	snap, err := s.deps.Snap.LatestSnapshot(r.Context())
 	if err == nil {
 		data.LastScanAt = snap.ScannedAt
 		data.UFWActive = snap.UFWActive
+		data.UFWReadable = snap.UFWReadable
 
 		// Collect all ports from the snapshot for the port table.
 		portSet := make(map[int]struct{})
@@ -134,11 +136,13 @@ func (s *Server) handleReservationsPage(w http.ResponseWriter, r *http.Request) 
 		IsLocalhost: isLocalhostRequest(r),
 		Now:         s.deps.now(),
 		UFWActive:   true,
+		UFWReadable: true,
 	}
 
 	snap, err := s.deps.Snap.LatestSnapshot(r.Context())
 	if err == nil {
 		data.UFWActive = snap.UFWActive
+		data.UFWReadable = snap.UFWReadable
 		data.LastScanAt = snap.ScannedAt
 	}
 
@@ -164,11 +168,13 @@ func (s *Server) handleHistoryPage(w http.ResponseWriter, r *http.Request) {
 		IsLocalhost: isLocalhostRequest(r),
 		Now:         s.deps.now(),
 		UFWActive:   true,
+		UFWReadable: true,
 	}
 
 	snap, err := s.deps.Snap.LatestSnapshot(r.Context())
 	if err == nil {
 		data.UFWActive = snap.UFWActive
+		data.UFWReadable = snap.UFWReadable
 		data.LastScanAt = snap.ScannedAt
 	}
 

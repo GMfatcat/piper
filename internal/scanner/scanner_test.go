@@ -83,11 +83,11 @@ func TestScan_AllSourcesSucceed(t *testing.T) {
 	inspectData2 := inspectJSONForID(id2, "metrics-collector")
 
 	stub := newStubRunner(map[string][]byte{
-		"ss -tlnp -H":                            ssData,
-		"docker ps -a --format {{json .}}":        psData,
-		"ufw status numbered":                      ufwData,
-		"docker inspect " + id1:                   inspectData1,
-		"docker inspect " + id2:                   inspectData2,
+		"ss -tlnp -H":                      ssData,
+		"docker ps -a --format {{json .}}": psData,
+		"sudo -n ufw status numbered":      ufwData,
+		"docker inspect " + id1:            inspectData1,
+		"docker inspect " + id2:            inspectData2,
 	}, nil)
 
 	sc := &Scanner{Runner: stub}
@@ -121,6 +121,9 @@ func TestScan_AllSourcesSucceed(t *testing.T) {
 	if !result.UFWActive {
 		t.Error("UFWActive: want true")
 	}
+	if !result.UFWReadable {
+		t.Error("UFWReadable: want true after a successful ufw status read")
+	}
 	if len(result.UFW) == 0 {
 		t.Error("UFW: want non-empty rules")
 	}
@@ -150,9 +153,9 @@ func TestScan_UFWInactive(t *testing.T) {
 	ufwData := loadFixture(t, "ufw", "inactive.txt")
 
 	stub := newStubRunner(map[string][]byte{
-		"ss -tlnp -H":                     []byte{},
-		"docker ps -a --format {{json .}}": []byte{},
-		"ufw status numbered":              ufwData,
+		"ss -tlnp -H":                     {},
+		"docker ps -a --format {{json .}}": {},
+		"sudo -n ufw status numbered":     ufwData,
 	}, nil)
 
 	sc := &Scanner{Runner: stub}
@@ -163,6 +166,9 @@ func TestScan_UFWInactive(t *testing.T) {
 
 	if result.UFWActive {
 		t.Error("UFWActive: want false for inactive status")
+	}
+	if !result.UFWReadable {
+		t.Error("UFWReadable: want true (command succeeded; firewall just disabled)")
 	}
 	if len(result.UFW) != 0 {
 		t.Errorf("UFW: want empty, got %d rules", len(result.UFW))
@@ -194,7 +200,7 @@ func TestScan_UFWMissing(t *testing.T) {
 		"docker inspect " + id1:            inspectData1,
 		"docker inspect " + id2:            inspectData2,
 	}, map[string]error{
-		"ufw status numbered": ufwErr,
+		"sudo -n ufw status numbered": ufwErr,
 	})
 
 	sc := &Scanner{Runner: stub}
@@ -209,6 +215,9 @@ func TestScan_UFWMissing(t *testing.T) {
 	}
 	if result.UFWActive {
 		t.Error("UFWActive: want false when ufw is missing")
+	}
+	if result.UFWReadable {
+		t.Error("UFWReadable: want false when the ufw command itself failed")
 	}
 
 	// SS and Docker must still complete
@@ -230,8 +239,8 @@ func TestScan_DockerErrorDoesNotBlockSS(t *testing.T) {
 	dockerErr := errors.New("cannot connect to the Docker daemon")
 
 	stub := newStubRunner(map[string][]byte{
-		"ss -tlnp -H":         ssData,
-		"ufw status numbered":  ufwData,
+		"ss -tlnp -H":                 ssData,
+		"sudo -n ufw status numbered": ufwData,
 	}, map[string]error{
 		"docker ps -a --format {{json .}}": dockerErr,
 	})
@@ -281,9 +290,9 @@ func TestScan_InspectFailsForOneContainer(t *testing.T) {
 	inspectErr := errors.New("no such container: " + id2)
 
 	stub := newStubRunner(map[string][]byte{
-		"ss -tlnp -H":                     []byte{},
+		"ss -tlnp -H":                     {},
 		"docker ps -a --format {{json .}}": psData,
-		"ufw status numbered":              []byte("Status: inactive\n"),
+		"sudo -n ufw status numbered":     []byte("Status: inactive\n"),
 		"docker inspect " + id1:            inspectOK,
 	}, map[string]error{
 		"docker inspect " + id2: inspectErr,
@@ -362,9 +371,9 @@ func TestScan_ConcurrencyDoesntRace(t *testing.T) {
 	inspectData2 := inspectJSONForID(id2, "metrics-collector")
 
 	stub := newStubRunner(map[string][]byte{
-		"ss -tlnp -H":                     ssData,
+		"ss -tlnp -H":                      ssData,
 		"docker ps -a --format {{json .}}": psData,
-		"ufw status numbered":              ufwData,
+		"sudo -n ufw status numbered":      ufwData,
 		"docker inspect " + id1:            inspectData1,
 		"docker inspect " + id2:            inspectData2,
 	}, nil)

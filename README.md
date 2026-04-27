@@ -47,11 +47,33 @@ Targets:
 | `make build-host` | `dist/piper[.exe]` — current OS/arch, dev convenience |
 | `make test` / `test-race` / `lint` / `fmt` / `vet` | self-explanatory |
 
+## Sudoers configuration (UFW)
+
+`ufw status` requires root, so piper — which runs as a regular user — needs a
+sudoers entry granting **passwordless** access to that one command. Without
+it, `piper serve` will print a warning and the Web UI will show a "UFW data
+unavailable" banner; `ss` and `docker` data still works.
+
+Run this **once on the target host**, replacing `ymu` with your own username:
+
+```bash
+sudo tee /etc/sudoers.d/piper-ufw <<EOF
+ymu ALL=(root) NOPASSWD: /usr/sbin/ufw status, /usr/sbin/ufw status numbered
+EOF
+sudo chmod 0440 /etc/sudoers.d/piper-ufw
+```
+
+The whitelist is **read-only** — piper still cannot add or remove UFW rules.
+On non-Debian systems, swap `/usr/sbin/ufw` for the actual `which ufw` path.
+
 ## Quickstart
 
 ```bash
 # Drop the binary on the target host
 scp dist/piper user@h100:~/
+
+# Configure passwordless `sudo ufw status` (see "Sudoers configuration" above)
+# … then …
 
 # Open the web port (one-time)
 ssh user@h100 'sudo ufw allow 7878/tcp'

@@ -25,6 +25,10 @@ type ScanSnapshot struct {
 	Inspected map[string]scanner.DockerEntry
 	UFW       []scanner.UFWRule
 	UFWActive bool
+	// UFWReadable is true when the underlying `ufw status` command succeeded,
+	// independent of whether the firewall itself is active. False indicates a
+	// permission/missing-binary problem the operator must fix (sudoers).
+	UFWReadable bool
 }
 
 // SnapshotProvider abstracts the source of the latest scan data. In

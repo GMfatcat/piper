@@ -21,8 +21,13 @@
         <li><a href="/history">History</a></li>
       </ul>
     </nav>
-    {{if not .UFWActive}}
-      <article class="warning">UFW is inactive — port firewall info unavailable. Run <code>sudo ufw enable</code>.</article>
+    {{if not .UFWReadable}}
+      <article class="banner-alert" role="alert">
+        UFW data unavailable — piper could not read <code>ufw status</code> (sudoers not configured?).
+        See server logs for the exact cause and the README "Sudoers configuration" section for the fix.
+      </article>
+    {{else if not .UFWActive}}
+      <article class="warning" role="status">UFW is inactive — port firewall info unavailable. Run <code>sudo ufw enable</code>.</article>
     {{end}}
   </header>
   <main class="container">
